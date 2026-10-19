@@ -1,0 +1,27 @@
+{
+  "name": "kuntur-agent",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Kuntur: an AI agent that pays tuition and moves money across borders for international students, inside a permission-tiered, policy-checked sandbox.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "test": "vitest run",
+    "demo": "tsx scripts/demo-run.ts"
+  },
+  "dependencies": {
+    "next": "14.2.35",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "20.19.43",
+    "@types/react": "18.3.31",
+    "@types/react-dom": "18.3.7",
+    "tsx": "4.23.15",
+    "typescript": "5.9.3",
+    "vitest": "3.2.7"
+  },
+  "engines": { "node": ">=18.18" }
+}

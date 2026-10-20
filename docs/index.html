@@ -1,0 +1,67 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Overview · Kuntur</title><meta name="description" content="Kuntur: an AI agent that pays international students’ bills abroad at the real cost, safely.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css"></head><body>
+<header class="nav"><div class="nav-in"><a class="brand" href="">Kuntur</a><a class="l on" href="">Overview</a><a class="l" href="architecture/">Architecture</a><a class="l" href="security/">Security</a><a class="l" href="testing/">Testing</a><a class="btn" href="https://tuition-pay-agent.vercel.app/">Live demo</a></div></header>
+<section class="hero"><div class="hero-in"><p class="kicker">2026 Shenzhen FinTechathon · International Track · Topic C</p><h1>Kuntur</h1><p class="lead">An AI agent that pays international students’ bills abroad at the <b style="color:#ffc23d;font-weight:600">real cost</b>, and can’t be tricked into paying the wrong one.</p><div class="ctas"><a class="btn" href="https://tuition-pay-agent.vercel.app/">Open the live demo</a><a class="btn ghost" href="https://github.com/MarisolVizu/tuition-pay-agent">Source code</a><a class="btn ghost" href="[YOUR-VIDEO-LINK]">Demo video</a></div></div></section>
+<div class="wrap">
+<section class="section"><p class="kicker" style="color:var(--mags)">The problem</p>
+<h2>Banks show the fee. They hide the rest in the exchange rate.</h2>
+<p class="sub">A student paying USD 3,800 of tuition from Peru sees a PEN 85 fee. The bank also applies a worse exchange rate than the market, which nobody shows her.</p>
+<div class="big"><div><div class="num a">PEN 85</div><small>the fee the bank shows</small></div><div><div class="num b">PEN 455</div><small>what it really costs on top: the fee plus PEN 370 hidden in the rate</small></div></div>
+<p style="font-size:14px;color:var(--ink3);margin-top:24px">Sandbox example at a reference rate of 3.75 PEN per USD; provider margins are illustrative. The live app uses real mid-market rates.</p>
+</section>
+
+<section class="section"><p class="kicker" style="color:var(--mags)">What Kuntur does</p>
+<h2>The whole payment, from the bill to the receipt</h2>
+<p class="sub">Kuntur is an AI agent (GPT-4.1 mini on Azure, model-agnostic) that completes a real cross-border task end to end, inside limits the student sets.</p>
+<div class="four">
+<div><em>1</em><b>Reads the bill</b><p>and scans it for hidden instructions aimed at the AI.</p></div>
+<div><em>2</em><b>Compares providers</b><p>on total cost at today’s real mid-market rate, in any of 14 home currencies.</p></div>
+<div><em>3</em><b>Proposes the payment</b><p>with the cheapest licensed provider. A policy engine checks it; the student approves.</p></div>
+<div><em>4</em><b>Keeps a sealed record</b><p>of every step, in a SHA-256 hash chain, downloadable as PDF, Excel or JSON.</p></div>
+</div></section>
+
+<section class="section"><p class="kicker" style="color:var(--mags)">The product</p>
+<h2>Nothing is paid until the student has seen the real cost</h2>
+<div class="shots" style="margin-top:28px">
+<figure><img class="shot" src="assets/approve.png" alt="Approval card: cost at the real market rate, the hidden margin, the fee and ten safety checks"><figcaption>The approval card: real market cost, the provider’s hidden margin in red, the fee, and ten safety checks.</figcaption></figure>
+<div style="display:grid;gap:28px">
+<figure><img class="shot" src="assets/bars.png" alt="Cost comparison of four providers with hidden-cost bars"><figcaption>The agent’s comparison. The cheapest provider has no licence, so it is excluded.</figcaption></figure>
+<figure><img class="shot" src="assets/blocked.png" alt="Screen: Kuntur did not pay this bill"><figcaption>The fake housing invoice with hidden instructions is stopped before money moves.</figcaption></figure>
+</div></div></section>
+
+<section class="section"><p class="kicker" style="color:var(--mags)">One principle</p>
+<h2>The model proposes. Code decides.</h2>
+<div class="chain"><div class="n"><b>Student</b><span>asks, sets the permission level, approves</span></div><div class="arr">→</div><div class="n"><b>AI agent</b><span>plans and picks among 7 tools</span></div><div class="arr">→</div><div class="n hl"><b>Policy engine</b><span>9 fixed checks, outside the model</span></div><div class="arr">→</div><div class="n"><b>Ledger</b><span>the only place money moves</span></div></div>
+<p class="sub" style="margin-top:20px">The agent has no tool that approves or executes a payment. <a href="architecture/">Read the architecture →</a></p>
+</section>
+
+<section class="section"><p class="kicker" style="color:var(--mags)">Transparency</p>
+<h2>What’s real, and what’s simulated</h2>
+<div class="tbl"><table><tr><th>Component</th><th>Status</th><th>Detail</th></tr>
+<tr><td>Exchange rates</td><td><span class="tag">Real</span></td><td>Live mid-market rates from ExchangeRate-API, validated, 14 currencies</td></tr>
+<tr><td>AI agent</td><td><span class="tag">Real</span></td><td>Azure OpenAI GPT-4.1 mini; the model is named under every answer</td></tr>
+<tr><td>Money and balances</td><td><span class="tag sim">Simulated</span></td><td>Signed sandbox, as the rules allow for non-on-chain topics</td></tr>
+<tr><td>Providers</td><td><span class="tag sim">Simulated</span></td><td>Fictional, one per real market category: bank wire, fintech, education platform, unlicensed operator</td></tr></table></div>
+</section>
+
+<section class="section"><p class="kicker" style="color:var(--mags)">Try it</p>
+<h2>Five things to try in the live demo</h2>
+<div class="tbl"><table><tr><th>Do this</th><th>What happens</th></tr>
+<tr><td>Home → “Pay it with Kuntur”</td><td>The agent compares providers and prepares a SwiftLite payment for your approval</td></tr>
+<tr><td>Pay the suspicious housing deposit</td><td>Warning about hidden instructions; the payment is blocked</td></tr>
+<tr><td>Chat: “Pay the housing deposit with QuickRemit”</td><td>Refused: unverified payee, flagged document, unlicensed provider</td></tr>
+<tr><td>Settings → Auto, then pay the exchange fee in CNY</td><td>Paid automatically, because it is under the limit and passes every check</td></tr>
+<tr><td>Activity → Activity report (PDF)</td><td>A readable report of every sealed step</td></tr></table></div>
+</section>
+
+<section class="section" style="border-bottom:0"><p class="kicker" style="color:var(--mags)">Documentation</p>
+<h2>Read more</h2>
+<div class="docs" style="margin-top:20px">
+<a href="architecture/"><b>Architecture</b><span>System design, the agent loop, total-cost algorithm, policy engine</span></a>
+<a href="security/"><b>Security</b><span>Permission levels, threat model and the list of known risks</span></a>
+<a href="testing/"><b>Testing</b><span>Automated tests and execution evidence</span></a>
+</div></section>
+</div><footer>Kuntur · 2026 Shenzhen International FinTech Competition, International Track, Topic C · <a href="https://github.com/MarisolVizu/tuition-pay-agent">Source code</a> · All accounts, payees and providers are fictional; no real money moves.</footer></body></html>

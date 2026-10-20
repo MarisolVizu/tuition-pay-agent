@@ -1,0 +1,53 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Security · Kuntur</title><meta name="description" content="Kuntur: an AI agent that pays international students’ bills abroad at the real cost, safely.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/style.css"></head><body>
+<header class="nav"><div class="nav-in"><a class="brand" href="../">Kuntur</a><a class="l" href="../">Overview</a><a class="l" href="../architecture/">Architecture</a><a class="l on" href="../security/">Security</a><a class="l" href="../testing/">Testing</a><a class="btn" href="https://tuition-pay-agent.vercel.app/">Live demo</a></div></header>
+<section class="hero"><div class="hero-in"><p class="kicker">Security self-assessment</p><h1>Security</h1><p class="lead">Permission levels, the threat model, and the risks we haven’t solved yet.</p></div></section><div class="page"><nav class="toc" aria-label="On this page"><p>On this page</p><a href="#principles">Design principles</a><a href="#levels">Permission levels</a><a href="#threats">Threats and mitigations</a><a href="#risks">Known risks</a><a href="#compliance">Compliance notes</a></nav><article>
+<h2 id="principles">Design principles</h2>
+<ol class="steps">
+<li><strong>The model proposes, code decides.</strong> Money moves only through <code>propose_payment</code>, judged by a deterministic engine outside the model.</li>
+<li><strong>Least privilege by default.</strong> Four permission levels; the default requires approval for every payment.</li>
+<li><strong>Documents are data, not instructions.</strong> Untrusted content is wrapped, scanned, and the scan is a blocking check.</li>
+<li><strong>Everything is evidence.</strong> A hash-chained activity log, exportable, with personal data masked.</li>
+<li><strong>Fail closed.</strong> A failed check, invalid signature, unknown tool or malformed input is always denied.</li>
+</ol>
+
+<h2 id="levels">Permission levels</h2>
+<div class="tbl"><table><tr><th>Level</th><th>The agent may</th><th>Enforced in</th></tr>
+<tr><td>0 · View</td><td>Read balance, bills and rates</td><td><code>TOOL_MIN_TIER</code>, gate in <code>runTool</code></td></tr>
+<tr><td>1 · Advise</td><td>+ compare providers, manage rate alerts</td><td>Same</td></tr>
+<tr><td>2 · Ask me <span class="tag">default</span></td><td>+ propose payments; the student approves every one</td><td><code>evaluatePayment</code> → needs confirmation; <code>/api/confirm</code> is the only approval path</td></tr>
+<tr><td>3 · Auto</td><td>+ payments that pass every check and are under the auto-approve limit execute on their own</td><td><code>evaluatePayment</code> → auto-execute</td></tr></table></div>
+<p>Always on, at every level: payee verification, licensed providers, provider scope, balance, per-payment and daily limits, duplicate-payment block, injection scan, and a full re-check at approval time.</p>
+
+<h2 id="threats">Threats and mitigations</h2>
+<div class="tbl"><table><tr><th>Threat</th><th>Mitigation</th><th>Tested in</th></tr>
+<tr><td>Prompt injection in an invoice</td><td>Untrusted wrapping, 7-family scanner as a blocking check, system-prompt rule</td><td><code>security</code>, <code>agent</code></td></tr>
+<tr><td>Paying an unlicensed provider because it is cheapest</td><td>Licence check; recommender excludes it; refused even when the user insists</td><td><code>policy</code>, <code>agent</code></td></tr>
+<tr><td>Paying an unverified payee</td><td>Payee-verification check</td><td><code>policy</code></td></tr>
+<tr><td>The agent exceeding its authority</td><td>Tool gate per level; no approve or execute tool; unknown tools blocked and logged</td><td><code>security</code></td></tr>
+<tr><td>Editing balance, limits or level in the browser</td><td>HMAC-SHA256 signed state, constant-time comparison, HTTP 401</td><td><code>security</code></td></tr>
+<tr><td>Double payment</td><td>Invoice must be open and not already pending</td><td><code>policy</code></td></tr>
+<tr><td>Approving an outdated proposal</td><td>Every check runs again at approval</td><td><code>policy</code></td></tr>
+<tr><td>Contradictory or unrealistic rate alerts</td><td>One alert per currency; target validated against today’s rate</td><td><code>alerts</code></td></tr>
+<tr><td>Leaking account numbers or e-mails</td><td>Masking in tool outputs and in the log (numbers such as amounts are never altered)</td><td><code>security</code></td></tr>
+<tr><td>Silent editing of history</td><td>Hash-chained log verified on every response</td><td><code>security</code></td></tr>
+<tr><td>Oversized or malformed input</td><td>Message, body and tool-input limits and validation</td><td><code>security</code></td></tr>
+<tr><td>Clickjacking, MIME sniffing</td><td>Security headers in <code>next.config.mjs</code></td><td>—</td></tr></table></div>
+
+<h2 id="risks">Known risks</h2>
+<p>What is not solved yet, and how a production version would address it.</p>
+<div class="tbl"><table><tr><th>Risk</th><th>Severity</th><th>Plan</th></tr>
+<tr><td>A user could replay an older signed state</td><td><span class="tag bad">Medium</span></td><td>Server-side ledger with a version per session</td></tr>
+<tr><td>Pattern-based injection scanner can miss new phrasings</td><td><span class="tag bad">Medium</span></td><td>Defence in depth already applies; add a classifier and bank-detail change alerts</td></tr>
+<tr><td>Payee verification is a static flag</td><td><span class="tag bad">Medium</span></td><td>Confirmation-of-payee or micro-deposit checks</td></tr>
+<tr><td>Reference rates come from a daily free feed</td><td><span class="tag sim">Low</span></td><td>Licensed intraday feed and live provider quotes</td></tr>
+<tr><td>No user authentication</td><td><span class="tag sim">Low</span></td><td>Passkeys or OAuth and KYC before real money</td></tr>
+<tr><td>No rate limiting on the API</td><td><span class="tag sim">Low</span></td><td>Edge rate limiter or firewall rules</td></tr>
+<tr><td>Log trimmed to the last 300 entries in state</td><td><span class="tag sim">Low</span></td><td>Persist the full chain server-side</td></tr></table></div>
+
+<h2 id="compliance">Compliance notes</h2>
+<p>Kuntur is designed around the obligations a real deployment would face: KYC and anti-money-laundering screening at the provider level, disclosure of the full cost including the exchange-rate margin, human oversight of automated payments, record keeping, and data minimisation. All data in the sandbox is fictional.</p>
+</article></div><footer>Kuntur · 2026 Shenzhen International FinTech Competition, International Track, Topic C · <a href="https://github.com/MarisolVizu/tuition-pay-agent">Source code</a> · All accounts, payees and providers are fictional; no real money moves.</footer></body></html>

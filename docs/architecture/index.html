@@ -1,0 +1,88 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Architecture · Kuntur</title><meta name="description" content="Kuntur: an AI agent that pays international students’ bills abroad at the real cost, safely.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/style.css"></head><body>
+<header class="nav"><div class="nav-in"><a class="brand" href="../">Kuntur</a><a class="l" href="../">Overview</a><a class="l on" href="../architecture/">Architecture</a><a class="l" href="../security/">Security</a><a class="l" href="../testing/">Testing</a><a class="btn" href="https://tuition-pay-agent.vercel.app/">Live demo</a></div></header>
+<section class="hero"><div class="hero-in"><p class="kicker">Technical documentation</p><h1>Architecture</h1><p class="lead">How the agent, the policy engine and the sandbox ledger work together.</p></div></section><div class="page"><nav class="toc" aria-label="On this page"><p>On this page</p><a href="#overview">System overview</a><a href="#agent">The agent loop</a><a href="#quote">Total-cost quote</a><a href="#policy">Policy engine</a><a href="#safety">Injection defence and log</a><a href="#data">Data</a><a href="#deploy">Stack and deployment</a><a href="#roadmap">Roadmap</a></nav><article>
+<h2 id="overview">System overview</h2>
+<p>Kuntur is a Next.js 14 application deployed on Vercel. The browser holds the sandbox state; every request is handled by a stateless serverless function that verifies the state’s signature, runs the agent or the requested action, and returns the new signed state.</p>
+<div class="chain"><div class="n"><b>Student</b><span>chat, guided flow, approvals</span></div><div class="arr">→</div><div class="n"><b>AI agent</b><span>LLM tool-use loop, 7 tools</span></div><div class="arr">→</div><div class="n hl"><b>Policy engine</b><span>9 deterministic checks</span></div><div class="arr">→</div><div class="n"><b>Ledger</b><span>signed sandbox state</span></div></div>
+<p class="note"><strong>The model proposes, code decides.</strong> The agent has no tool that approves or executes a payment. <code>propose_payment</code> is the only path to money, and its outcome is decided by the policy engine and the student.</p>
+
+<h3>API routes</h3>
+<div class="tbl"><table><tr><th>Route</th><th>Purpose</th></tr>
+<tr><td><code>/api/session</code></td><td>New sandbox in the chosen home currency, with live exchange rates</td></tr>
+<tr><td><code>/api/agent</code></td><td>Verify signature → run the agent loop → return reply, tool events, model label</td></tr>
+<tr><td><code>/api/confirm</code></td><td>Human-only approval or rejection of a pending payment</td></tr>
+<tr><td><code>/api/settings</code></td><td>Change the permission level</td></tr>
+<tr><td><code>/api/alerts</code></td><td>Create, replace, edit or delete rate alerts</td></tr>
+<tr><td><code>/api/tick</code></td><td>Demo tool: simulated rate move, or reset to live rates</td></tr></table></div>
+
+<h3>Code map</h3>
+<div class="tbl"><table><tr><th>File</th><th>Responsibility</th></tr>
+<tr><td><code>lib/agent.ts</code></td><td>System prompt, tool-use loop (OpenAI-compatible or Anthropic), model label, rule-based fallback</td></tr>
+<tr><td><code>lib/tools.ts</code></td><td>Tool schemas, permission gate per tool, untrusted-data wrapping, account masking</td></tr>
+<tr><td><code>lib/policy.ts</code></td><td>The nine payment checks and the decision: deny, needs confirmation, auto-execute</td></tr>
+<tr><td><code>lib/sandbox.ts</code>, <code>lib/actions.ts</code></td><td>Ledger: balances, payees, invoices, providers, quotes, payments, alerts</td></tr>
+<tr><td><code>lib/fx.ts</code>, <code>lib/currencies.ts</code></td><td>Live rates, validation and fallback; 14 currencies</td></tr>
+<tr><td><code>lib/guard.ts</code></td><td>Prompt-injection scanner, PII masking, input sanitising</td></tr>
+<tr><td><code>lib/audit.ts</code>, <code>lib/signing.ts</code></td><td>SHA-256 hash-chained log; HMAC-SHA256 signed state</td></tr></table></div>
+
+<h2 id="agent">The agent loop</h2>
+<ol class="steps">
+<li>The user message is written to the activity log.</li>
+<li>The model receives the system prompt, the home currency, the permission level and seven tool schemas.</li>
+<li>While the model asks for tools (up to eight rounds), each call goes through <code>runTool</code>, which enforces the permission level; results go back to the model.</li>
+<li>The final answer is returned with the list of tools used and a label naming the model, the number of calls, tokens and latency.</li>
+<li>Each turn is recorded as <code>llm.call</code>. If the model fails, <code>llm.error</code> is recorded and, unless <code>AGENT_FALLBACK=off</code>, a deterministic planner answers and the label says so.</li>
+</ol>
+<div class="tbl"><table><tr><th>Tool</th><th>Minimum level</th><th>What it does</th></tr>
+<tr><td><code>get_account_overview</code></td><td>View</td><td>Balance, limits, payees (masked), alerts</td></tr>
+<tr><td><code>list_invoices</code></td><td>View</td><td>Bills, with the document wrapped as untrusted data and its injection-scan result</td></tr>
+<tr><td><code>get_fx_rates</code></td><td>View</td><td>Mid-market rates with their source and update time</td></tr>
+<tr><td><code>compare_providers</code></td><td>Advise</td><td>Total-cost quotes and the recommended licensed provider</td></tr>
+<tr><td><code>create_fx_alert</code></td><td>Advise</td><td>Create or replace the alert for a currency</td></tr>
+<tr><td><code>delete_fx_alert</code></td><td>Advise</td><td>Delete an alert</td></tr>
+<tr><td><code>propose_payment</code></td><td>any</td><td>Submits a payment to the policy engine, which decides</td></tr></table></div>
+
+<h2 id="quote">Total-cost quote</h2>
+<p>For an amount <em>A</em> in the invoice currency, mid-market rate <em>r</em> (home-currency units per unit), provider spread <em>s</em> and fixed fee <em>f</em>:</p>
+<div class="formula">mid cost&nbsp;&nbsp;&nbsp;&nbsp;= A · r<br>FX markup&nbsp;&nbsp;&nbsp;= A · r · s<br>total&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;= A · r · (1 + s) + f<br>hidden cost = A · r · s + f</div>
+<p>When the invoice is already in the home currency, <em>r</em> = 1 and <em>s</em> = 0. The recommendation is the cheapest quote that is licensed and allowed for the payee category; cheaper non-compliant quotes are shown but excluded.</p>
+<p>Example at 3.75 PEN per USD for USD 3,800: SwiftLite costs PEN 14,441.75 (hidden PEN 191.75), the bank wire PEN 14,705.50 (hidden PEN 455.50): a saving of PEN 263.75.</p>
+
+<h2 id="policy">Policy engine</h2>
+<p>Every proposal is evaluated against nine checks. One failure denies it.</p>
+<ol class="steps">
+<li>Permission level allows payments (Ask me or Auto)</li><li>Invoice is open and not already pending (no double payment)</li><li>Payee is verified</li><li>Invoice passed the injection scan</li><li>Provider is licensed (KYC/AML)</li><li>Provider can pay this kind of payee</li><li>Enough balance</li><li>Within the per-payment limit</li><li>Within the daily limit</li>
+</ol>
+<p>If all pass: at the Auto level and under the auto-approve limit the payment executes; otherwise it waits for the student. <strong>Everything is checked again at approval time.</strong></p>
+
+<h2 id="safety">Injection defence and audit log</h2>
+<p>Invoice text is wrapped in <code>&lt;untrusted&gt;</code> tags (forged closing tags are stripped) and scanned for seven pattern families: instruction override, role change, fake system tags, “skip confirmation”, “pre-approved” claims, messages addressed to the AI, and urgency. The scan result is a hard policy check, so a fooled model still cannot get the payment through.</p>
+<p>Each log entry is sealed as <code>SHA-256(seq, time, actor, type, summary, data, previous hash)</code>. Changing any past entry breaks every later seal; the app shows the chain status. Account numbers and e-mails are masked before an entry is written.</p>
+
+<h2 id="data">Data</h2>
+<div class="tbl"><table><tr><th>Data</th><th>Status</th><th>Detail</th></tr>
+<tr><td>Exchange rates</td><td><span class="tag">Real</span></td><td>ExchangeRate-API open endpoint, base = home currency, cached 6 h, validated with a sanity band; built-in reference values if unavailable, clearly labelled</td></tr>
+<tr><td>AI model</td><td><span class="tag">Real</span></td><td>Azure OpenAI GPT-4.1 mini; any OpenAI-compatible model or Claude works</td></tr>
+<tr><td>Balance, invoices, payees</td><td><span class="tag sim">Simulated</span></td><td>Signed sandbox; the profile is defined in USD and converted to the home currency</td></tr>
+<tr><td>Providers</td><td><span class="tag sim">Simulated</span></td><td>Bank wire (2.6 %), SwiftLite (1.1 %), CampusPay (1.5 %, universities only), QuickRemit (0.4 %, unlicensed)</td></tr>
+<tr><td>Rate alerts</td><td><span class="tag sim">Sandbox</span></td><td>One per currency; targets validated against today’s rate; editable and deletable</td></tr></table></div>
+
+<h2 id="deploy">Stack and deployment</h2>
+<p>Next.js 14, TypeScript, React 18, no database. Vitest for tests. Deployed on Vercel; this documentation is static HTML on GitHub Pages.</p>
+<div class="tbl"><table><tr><th>Variable</th><th>Required</th><th>Purpose</th></tr>
+<tr><td><code>STATE_SECRET</code></td><td>Yes</td><td>HMAC key that signs the sandbox state</td></tr>
+<tr><td><code>LLM_BASE_URL</code>, <code>LLM_API_KEY</code>, <code>LLM_MODEL</code></td><td>For the AI agent</td><td>Any OpenAI-compatible endpoint, e.g. Azure <code>…/openai/v1</code></td></tr>
+<tr><td><code>ANTHROPIC_API_KEY</code></td><td>Alternative</td><td>Use Claude instead</td></tr>
+<tr><td><code>AGENT_FALLBACK</code></td><td>No</td><td><code>off</code> disables the rule-based fallback</td></tr></table></div>
+<pre><code>git clone https://github.com/MarisolVizu/tuition-pay-agent.git
+cd tuition-pay-agent && npm install
+cp .env.example .env.local   # add STATE_SECRET and the model variables
+npm run dev                  # http://localhost:3000</code></pre>
+
+<h2 id="roadmap">Roadmap</h2>
+<p>Real quotes from licensed provider APIs; open-banking account access and KYC; credit building from on-time tuition and rent payments; family-funded remittances approved from home.</p>
+</article></div><footer>Kuntur · 2026 Shenzhen International FinTech Competition, International Track, Topic C · <a href="https://github.com/MarisolVizu/tuition-pay-agent">Source code</a> · All accounts, payees and providers are fictional; no real money moves.</footer></body></html>

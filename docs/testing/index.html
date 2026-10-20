@@ -1,0 +1,34 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Testing · Kuntur</title><meta name="description" content="Kuntur: an AI agent that pays international students’ bills abroad at the real cost, safely.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/style.css"></head><body>
+<header class="nav"><div class="nav-in"><a class="brand" href="../">Kuntur</a><a class="l" href="../">Overview</a><a class="l" href="../architecture/">Architecture</a><a class="l" href="../security/">Security</a><a class="l on" href="../testing/">Testing</a><a class="btn" href="https://tuition-pay-agent.vercel.app/">Live demo</a></div></header>
+<section class="hero"><div class="hero-in"><p class="kicker">Testing and evidence</p><h1>Testing</h1><p class="lead">How we test Kuntur, and how to reproduce the evidence.</p></div></section><div class="page"><nav class="toc" aria-label="On this page"><p>On this page</p><a href="#tests">Automated tests</a><a href="#evidence">Execution evidence</a><a href="#live">Live product evidence</a></nav><article>
+<h2 id="tests">Automated tests</h2>
+<p><code>npm test</code> runs 48 Vitest tests in five suites.</p>
+<div class="tbl"><table><tr><th>Suite</th><th>What it covers</th></tr>
+<tr><td><code>policy</code></td><td>Quote maths, exclusion of unlicensed providers, every policy check, the Auto limit, propose → approve → duplicate block, re-check at approval, rejection</td></tr>
+<tr><td><code>security</code></td><td>Injection scanner, forged tags, PII masking, input limits, tamper detection, forged-state rejection, tool gating, unknown tools</td></tr>
+<tr><td><code>agent</code></td><td>End-to-end tasks in English and Spanish, from USD, JPY, CNY, EUR and MXN accounts</td></tr>
+<tr><td><code>fx</code></td><td>Live-rate parsing for any base, validation of bad responses, fallback, currency detection</td></tr>
+<tr><td><code>alerts</code></td><td>One alert per currency, validation against today’s rate, edit, delete, re-trigger</td></tr></table></div>
+
+<h2 id="evidence">Execution evidence</h2>
+<p><code>npm run demo</code> runs the <strong>real AI agent</strong> (with the model configured in <code>.env.local</code>) through a full scenario and writes <a href="https://github.com/MarisolVizu/tuition-pay-agent/blob/main/evidence/sandbox-run.json"><code>evidence/sandbox-run.json</code></a>, recording which engine answered each step.</p>
+<ol class="steps">
+<li>Lists the bills; the housing deposit is flagged.</li>
+<li>“Pay my tuition the cheapest safe way”: compares four providers, excludes the unlicensed one, proposes SwiftLite; a human approves.</li>
+<li>“Paga el depósito de vivienda”: injection warning; payment denied.</li>
+<li>“Pay the housing deposit with QuickRemit”: denied again.</li>
+<li>At View level, a comparison is blocked by the permission gate.</li>
+<li>At Auto level, the CNY exchange fee is paid automatically under the limit.</li>
+<li>A rate alert is created and a simulated market move triggers it.</li>
+</ol>
+<pre><code>npm install
+npm test        # 48 tests
+npm run demo    # evidence/sandbox-run.json</code></pre>
+
+<h2 id="live">Evidence from the live product</h2>
+<p>In the <a href="https://tuition-pay-agent.vercel.app/">live demo</a>, the <strong>Activity</strong> page downloads the same record as a readable PDF report, PDF receipts, Excel-ready CSV, or technical JSON with the seals. Every answer from the agent is labelled with the AI model that produced it.</p>
+</article></div><footer>Kuntur · 2026 Shenzhen International FinTech Competition, International Track, Topic C · <a href="https://github.com/MarisolVizu/tuition-pay-agent">Source code</a> · All accounts, payees and providers are fictional; no real money moves.</footer></body></html>

@@ -7,6 +7,7 @@ Kuntur is an AI agent that completes a real financial task end to end: it reads 
 
 - Live demo: https://tuition-pay-agent.vercel.app/
 - Documentation: https://marisolvizu.github.io/tuition-pay-agent/
+- Demo video: YOUR-VIDEO-LINK
 
 ## Features
 
@@ -26,12 +27,12 @@ Kuntur is an AI agent that completes a real financial task end to end: it reads 
 ## Quick start
 
 ```bash
-git clone https://github.com/YOUR-USER/kuntur.git
-cd kuntur
+git clone https://github.com/MarisolVizu/tuition-pay-agent.git
+cd tuition-pay-agent
 npm install
 cp .env.example .env.local      # set STATE_SECRET; ANTHROPIC_API_KEY is optional
 npm run dev                     # http://localhost:3000
-npm test                        # 42 tests
+npm test                        # 48 tests
 npm run demo                    # writes evidence/sandbox-run.json
 ```
 

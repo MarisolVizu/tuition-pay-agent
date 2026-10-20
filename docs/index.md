@@ -38,8 +38,7 @@ A Peruvian student paying USD 3,800 of tuition abroad typically sees only the â€
 
 ## Links
 
-- Live demo: `https://YOUR-PROJECT.vercel.app`
-- Source code: `https://github.com/YOUR-USER/kuntur`
-- Demo video: `YOUR-VIDEO-LINK`
+- Live demo: https://tuition-pay-agent.vercel.app/
+- Documentation: https://marisolvizu.github.io/tuition-pay-agent/
 
 All accounts, payees and providers are fictional. No real money moves.

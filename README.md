@@ -5,9 +5,8 @@ Theme: *AI as a Financial Participant*.
 
 Kuntur is an AI agent that completes a real financial task end to end: it reads what a student owes abroad, compares transfer providers on total cost (FX markup + fees), refuses unlicensed providers and manipulated invoices, prepares the payment and executes it under a permission tier the student controls. Everything runs in a sandbox with simulated money and is recorded in a tamper-evident audit log.
 
-- Live demo: https://YOUR-PROJECT.vercel.app
-- Documentation: https://YOUR-USER.github.io/kuntur/
-- Demo video: YOUR-VIDEO-LINK
+- Live demo: https://tuition-pay-agent.vercel.app/
+- Documentation: https://marisolvizu.github.io/tuition-pay-agent/
 
 ## Features
 

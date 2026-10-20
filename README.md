@@ -7,7 +7,6 @@ Kuntur is an AI agent that completes a real financial task end to end: it reads 
 
 - Live demo: https://tuition-pay-agent.vercel.app/
 - Documentation: https://marisolvizu.github.io/tuition-pay-agent/
-- Demo video: YOUR-VIDEO-LINK
 
 ## Features
 

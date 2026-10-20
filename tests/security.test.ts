@@ -56,7 +56,7 @@ describe("tamper evidence", () => {
     const sig = signState(s);
     expect(verifyState(s, sig)).toBe(true);
     const forged = JSON.parse(JSON.stringify(s));
-    forged.balances.PEN = 1_000_000;
+    forged.balance = 1_000_000;
     expect(verifyState(forged, sig)).toBe(false);
     expect(verifyState(s, "deadbeef")).toBe(false);
   });
@@ -67,7 +67,7 @@ describe("tool gating by tier", () => {
     const s = initialState();
     s.tier = 0;
     expect(runTool(s, "compare_providers", { invoice_id: "INV-HIT-2611" }).event.ok).toBe(false);
-    expect(runTool(s, "create_fx_alert", { currency: "USD", direction: "below", target_pen_per_unit: 3.7 }).event.ok).toBe(false);
+    expect(runTool(s, "create_fx_alert", { currency: "USD", direction: "below", target_per_unit: 3.7 }).event.ok).toBe(false);
     expect(runTool(s, "get_fx_rates", {}).event.ok).toBe(true);
   });
   it("unknown tools are blocked and logged", () => {

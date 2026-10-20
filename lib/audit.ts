@@ -10,9 +10,17 @@ function hashEntry(e: Omit<AuditEntry, "hash">): string {
   return createHash("sha256").update(payload).digest("hex");
 }
 
+/** Mask PII in string values only; numbers (amounts, rates) are left untouched. */
+function maskValue(v: unknown): unknown {
+  if (typeof v === "string") return maskPII(v);
+  if (Array.isArray(v)) return v.map(maskValue);
+  if (v && typeof v === "object") return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, maskValue(x)]));
+  return v;
+}
+
 function maskData(data?: Record<string, unknown>): Record<string, unknown> | undefined {
   if (!data) return undefined;
-  return JSON.parse(maskPII(JSON.stringify(data)));
+  return maskValue(data) as Record<string, unknown>;
 }
 
 /** Append a tamper-evident, hash-chained entry. Mutates and returns state. */

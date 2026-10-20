@@ -45,11 +45,13 @@ title: Technical documentation
 4. Return the final text plus the list of tool events shown under the reply.
 5. On any API error, log it and fall back to the deterministic planner.
 
+Every turn records which engine answered: an `llm.call` entry in the activity log (model, provider, number of model calls, tokens, latency) or an `llm.error` entry if the model failed. The UI shows the same label under every answer, and **Settings → Test AI connection** makes a live round trip to the model. With `AGENT_FALLBACK=off`, a model failure is reported instead of being answered by the rule-based planner, so every answer provably comes from the model.
+
 The model **has no tool that executes or approves a payment**. `propose_payment` is the only path to money, and its outcome is decided by code.
 
 ### 2.2 Total-cost quote (`computeQuote`)
 
-For an amount *A* in foreign currency, mid-market rate *r* (PEN per unit), provider spread *s* and fixed fee *f*:
+For an amount *A* in the invoice currency, mid-market rate *r* (home-currency units per unit; *r* = 1 and *s* = 0 when the invoice is in the home currency), provider spread *s* and fixed fee *f*:
 
 ```
 mid cost     = A · r
@@ -86,11 +88,16 @@ Invoices are untrusted. Their text is wrapped in `<untrusted>` tags (with any fo
 
 `hash_n = SHA-256(seq, ts, actor, type, summary, data, hash_{n-1})`. Changing any past entry breaks every later link; `verifyChain` reports where. PII (account numbers, e-mails) is masked before an entry is written.
 
+## 2b. Any home currency
+
+The student chooses the currency they pay **from** (“Pay from”: PEN, USD, EUR, CNY, JPY, GBP, KRW, INR, MXN, BRL, COP, CLP, CAD, AUD). Invoices can be in any supported currency. Rates are fetched with the home currency as base, so every quote, fee, limit and balance is shown in the student’s own currency. The student profile and provider fees are defined in USD and converted at session start; when the invoice is already in the home currency there is no conversion and therefore no FX markup.
+
 ## 3. Data: what is real and what is simulated
 
 | Data | Source |
 |---|---|
-| Mid-market exchange rates (PEN per USD, CNY, EUR) | **Real.** ExchangeRate-API open access endpoint, fetched when a session starts, cached 6 hours, updated daily by the provider. Responses are validated (success flag, positive values, sanity band); on failure the sandbox uses built-in reference values and says so in the UI and the audit log. |
+| Mid-market exchange rates for 14 currencies, based on the user’s home currency | **Real.** ExchangeRate-API open access endpoint, fetched when a session starts, cached 6 hours, updated daily by the provider. Responses are validated (success flag, positive values, sanity band); on failure the sandbox uses built-in reference values and says so in the UI and the audit log. |
+| Rate alerts | One alert per currency (a new one replaces the old, so alerts never contradict). Targets are validated against today’s real rate: “below” must be under it, “above” over it, within ±50 %. Alerts can be edited or deleted by the user or by the agent (`delete_fx_alert`). |
 | “Simulate market move” | Simulated ±0.8 % moves on top of the real reference rate, to demonstrate FX alerts. |
 | Balances, payments, invoices, payees | Simulated sandbox, as the competition rules allow for non-on-chain topics. |
 | Transfer providers | Fictional, each representing a real market category: traditional bank wire, fintech transfer service, education payment platform, unlicensed operator. Spreads and fees are illustrative assumptions following the real-world pattern (banks most expensive, fintechs cheaper, unlicensed operators cheapest but non-compliant). |
@@ -99,8 +106,8 @@ Invoices are untrusted. Their text is wrapped in `<untrusted>` tags (with any fo
 
 | Item | Value |
 |---|---|
-| Balances | PEN 18,500 · USD 420 |
-| Limits | per transaction PEN 16,000 · daily PEN 20,000 · auto-approve PEN 2,000 |
+| Balance | PEN 18,500 (≈ USD 4,933, converted to the chosen home currency) |
+| Limits | per transaction PEN 16,000 · daily PEN 20,000 · auto-approve PEN 2,000 (converted likewise) |
 | Invoices | Tuition USD 3,800 (verified university) · Housing deposit USD 650 (unverified payee, injected instructions) · Exchange fee CNY 1,500 (verified university) |
 | Providers | Bank wire (2.6 % + PEN 85) · SwiftLite (1.1 % + PEN 35) · CampusPay (1.5 %, universities only) · QuickRemit (0.4 % + PEN 15, **unlicensed**) |
 

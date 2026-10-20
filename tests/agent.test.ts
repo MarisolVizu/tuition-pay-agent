@@ -36,6 +36,25 @@ describe("rule-based agent: end-to-end tasks", () => {
   it("creates an FX alert", () => {
     const s = initialState();
     runRules(s, "Alert me if USD drops below 3.70");
-    expect(s.alerts[0]).toMatchObject({ currency: "USD", direction: "below", targetPENPerUnit: 3.7 });
+    expect(s.alerts[0]).toMatchObject({ currency: "USD", direction: "below", targetPerUnit: 3.7 });
+  });
+});
+
+describe("rule-based agent in other home currencies", () => {
+  for (const home of ["USD", "JPY", "CNY", "EUR", "MXN"] as const) {
+    it(`completes the tuition flow from a ${home} account`, () => {
+      const s = initialState(undefined, home);
+      const r = runRules(s, "Pay my tuition the cheapest safe way");
+      expect(s.pending).toHaveLength(1);
+      expect(s.pending[0].quote.home).toBe(home);
+      expect(r.reply).toContain(home);
+      expect(s.pending[0].providerId).not.toBe("quickremit");
+    });
+  }
+  it("compares an arbitrary currency the user names", () => {
+    const s = initialState(undefined, "PEN");
+    const r = runRules(s, "Compare sending 50000 yen");
+    expect(r.events[0].input).toMatchObject({ amount: 50000, currency: "JPY" });
+    expect(r.reply).toMatch(/PEN/);
   });
 });

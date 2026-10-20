@@ -1,14 +1,19 @@
 import { randomUUID } from "crypto";
-import type { ForeignCurrency, Invoice, Provider, Quote, SandboxState, Payee } from "./types";
+import type { Currency, Invoice, Provider, Quote, SandboxState, Payee } from "./types";
 import { audit } from "./audit";
-import { FALLBACK_RATES, type LiveRates } from "./fx";
+import { fallbackRates, type LiveRates } from "./fx";
 
-/** Licensed-looking but fictional providers. Fees in PEN, spread over mid-market. */
+/**
+ * Fictional providers, one per real market category. Fixed fees are defined in USD and
+ * converted to the user's home currency; spreads are markups over the mid-market rate.
+ * (Fees are calibrated so that a PEN account at 3.75 sees PEN 85 / 35 / 0 / 15.)
+ */
+const REF = 3.75;
 export const PROVIDERS: Provider[] = [
   {
     id: "andes_wire",
     name: "Andes National Bank wire",
-    fixedFeePEN: 85,
+    fixedFeeUSD: 85 / REF,
     spreadPct: 2.6,
     eta: "3–5 business days",
     compliant: true,
@@ -18,7 +23,7 @@ export const PROVIDERS: Provider[] = [
   {
     id: "swiftlite",
     name: "SwiftLite",
-    fixedFeePEN: 35,
+    fixedFeeUSD: 35 / REF,
     spreadPct: 1.1,
     eta: "1–2 business days",
     compliant: true,
@@ -28,7 +33,7 @@ export const PROVIDERS: Provider[] = [
   {
     id: "campuspay",
     name: "CampusPay Direct",
-    fixedFeePEN: 0,
+    fixedFeeUSD: 0,
     spreadPct: 1.5,
     eta: "Same day",
     compliant: true,
@@ -38,7 +43,7 @@ export const PROVIDERS: Provider[] = [
   {
     id: "quickremit",
     name: "QuickRemit Express",
-    fixedFeePEN: 15,
+    fixedFeeUSD: 15 / REF,
     spreadPct: 0.4,
     eta: "Minutes",
     compliant: false,
@@ -89,7 +94,15 @@ const INVOICES: Invoice[] = [
   }
 ];
 
-export function initialState(live?: LiveRates): SandboxState {
+/** Round limits and balances to friendly numbers in any currency. */
+function nice(x: number): number {
+  return x >= 1000 ? Math.round(x / 100) * 100 : Math.round(x);
+}
+
+/** Student profile values, defined in USD and converted to the home currency. */
+const PROFILE_USD = { balance: 18500 / REF, perTransaction: 16000 / REF, daily: 20000 / REF, autoApprove: 2000 / REF };
+
+export function initialState(live?: LiveRates, home: Currency = live?.home ?? "PEN"): SandboxState {
   const now = new Date();
   const state: SandboxState = {
     version: 1,
@@ -97,24 +110,34 @@ export function initialState(live?: LiveRates): SandboxState {
     createdAt: now.toISOString(),
     day: now.toISOString().slice(0, 10),
     tier: 2,
-    balances: { PEN: 18500, USD: 420, CNY: 0, EUR: 0 },
-    rates: live ? { ...live.rates } : { ...FALLBACK_RATES },
+    home,
+    balance: 0,
+    rates: live ? { ...live.rates } : fallbackRates(home),
     ratesSource: live
       ? { ...live.source, simulatedMoves: 0 }
       : { kind: "fallback", provider: "built-in reference values", asOf: "static", simulatedMoves: 0 },
     payees: structuredClone(PAYEES),
     invoices: structuredClone(INVOICES),
-    limits: { perTransactionPEN: 16000, dailyPEN: 20000, autoApprovePEN: 2000 },
-    spentTodayPEN: 0,
+    limits: { perTransaction: 0, daily: 0, autoApprove: 0 },
+    spentToday: 0,
     pending: [],
     transactions: [],
     alerts: [],
     audit: [],
     counter: 0
   };
+  const usd = homePerUnit(state, "USD");
+  state.balance = nice(PROFILE_USD.balance * usd);
+  state.limits = {
+    perTransaction: nice(PROFILE_USD.perTransaction * usd),
+    daily: nice(PROFILE_USD.daily * usd),
+    autoApprove: nice(PROFILE_USD.autoApprove * usd)
+  };
   return audit(state, "system", "session.created", "Sandbox session created with simulated student account", {
     tier: state.tier,
-    balances: state.balances,
+    home: state.home,
+    balance: state.balance,
+    limits: state.limits,
     rates: state.rates,
     ratesSource: state.ratesSource
   });
@@ -140,25 +163,34 @@ export function findInvoice(state: SandboxState, ref: string): Invoice | undefin
   return state.invoices.find((i) => i.id.toLowerCase() === r);
 }
 
-export function computeQuote(state: SandboxState, provider: Provider, amount: number, currency: ForeignCurrency, payee?: Payee): Quote {
-  const midRate = state.rates[currency];
-  const midCostPEN = amount * midRate;
-  const fxMarkupPEN = midCostPEN * (provider.spreadPct / 100);
-  const totalPEN = midCostPEN + fxMarkupPEN + provider.fixedFeePEN;
+/** Home-currency units for one unit of `c` (1 when it is the home currency). */
+export function homePerUnit(state: SandboxState, c: Currency): number {
+  return c === state.home ? 1 : state.rates[c];
+}
+
+export function computeQuote(state: SandboxState, provider: Provider, amount: number, currency: Currency, payee?: Payee): Quote {
+  const sameCurrency = currency === state.home;
+  const midRate = homePerUnit(state, currency);
+  const spread = sameCurrency ? 0 : provider.spreadPct / 100; // no conversion, no FX markup
+  const fee = round2(provider.fixedFeeUSD * homePerUnit(state, "USD"));
+  const midCost = amount * midRate;
+  const fxMarkup = midCost * spread;
+  const total = midCost + fxMarkup + fee;
   const allowedForPayee =
     provider.allowedCategories === "all" || (!!payee && provider.allowedCategories.includes(payee.category));
   return {
+    home: state.home,
     providerId: provider.id,
     providerName: provider.name,
     amount,
     currency,
     midRate,
-    providerRate: round2(midRate * (1 + provider.spreadPct / 100) * 1000) / 1000,
-    midCostPEN: round2(midCostPEN),
-    fxMarkupPEN: round2(fxMarkupPEN),
-    feePEN: provider.fixedFeePEN,
-    totalPEN: round2(totalPEN),
-    hiddenCostPEN: round2(fxMarkupPEN + provider.fixedFeePEN),
+    providerRate: Number((midRate * (1 + spread)).toPrecision(6)),
+    midCost: round2(midCost),
+    fxMarkup: round2(fxMarkup),
+    fee,
+    total: round2(total),
+    hiddenCost: round2(fxMarkup + fee),
     eta: provider.eta,
     compliant: provider.compliant,
     complianceNote: provider.complianceNote,
@@ -167,8 +199,8 @@ export function computeQuote(state: SandboxState, provider: Provider, amount: nu
 }
 
 /** Quotes sorted by total cost. Non-compliant providers are returned but marked, never recommended. */
-export function compareProviders(state: SandboxState, amount: number, currency: ForeignCurrency, payee?: Payee) {
-  const quotes = PROVIDERS.map((p) => computeQuote(state, p, amount, currency, payee)).sort((a, b) => a.totalPEN - b.totalPEN);
+export function compareProviders(state: SandboxState, amount: number, currency: Currency, payee?: Payee) {
+  const quotes = PROVIDERS.map((p) => computeQuote(state, p, amount, currency, payee)).sort((a, b) => a.total - b.total);
   const eligible = quotes.filter((q) => q.compliant && q.allowedForPayee);
   return { quotes, recommended: eligible[0] ?? null };
 }
@@ -176,22 +208,37 @@ export function compareProviders(state: SandboxState, amount: number, currency: 
 /** Deterministic-enough market move for demos: each currency moves within ±0.8 %. */
 export function tickMarket(state: SandboxState, rand: () => number = Math.random): SandboxState {
   const before = { ...state.rates };
-  (Object.keys(state.rates) as ForeignCurrency[]).forEach((c) => {
-    const move = (rand() * 2 - 1) * 0.008;
-    state.rates[c] = Math.round(state.rates[c] * (1 + move) * 10000) / 10000;
+  // one market-wide move for the home currency plus small per-currency noise
+  const common = (rand() * 2 - 1) * 0.006;
+  Object.keys(state.rates).forEach((c) => {
+    const move = common + (rand() * 2 - 1) * 0.002;
+    state.rates[c] = Number((state.rates[c] * (1 + move)).toPrecision(6));
   });
   if (state.ratesSource) state.ratesSource.simulatedMoves += 1;
   audit(state, "system", "market.tick", "Simulated market move applied on top of the reference rate", { before, after: state.rates });
+  evaluateAlerts(state);
+  return state;
+}
+
+export function evaluateAlerts(state: SandboxState): void {
   for (const a of state.alerts) {
     if (a.triggeredAt) continue;
-    const r = state.rates[a.currency];
-    const hit = a.direction === "below" ? r <= a.targetPENPerUnit : r >= a.targetPENPerUnit;
+    const r = homePerUnit(state, a.currency);
+    const hit = a.direction === "below" ? r <= a.targetPerUnit : r >= a.targetPerUnit;
     if (hit) {
       a.triggeredAt = new Date().toISOString();
       a.triggeredRate = r;
-      audit(state, "system", "alert.triggered", `FX alert ${a.id}: ${a.currency} is ${r} PEN (${a.direction} ${a.targetPENPerUnit})`);
+      audit(state, "system", "alert.triggered", `FX alert ${a.id}: ${a.currency} is ${r} ${state.home} (${a.direction} ${a.targetPerUnit})`);
     }
   }
+}
+
+/** Discard simulated moves and go back to the real reference rate. */
+export function resetToLive(state: SandboxState, live: LiveRates): SandboxState {
+  state.rates = { ...live.rates };
+  state.ratesSource = { ...live.source, simulatedMoves: 0 };
+  audit(state, "system", "market.reset", `Rates reset to ${live.source.kind === "live" ? "the live reference rate" : "built-in reference values"}`, { rates: state.rates });
+  evaluateAlerts(state);
   return state;
 }
 
@@ -199,6 +246,6 @@ export function rollDay(state: SandboxState): void {
   const today = new Date().toISOString().slice(0, 10);
   if (state.day !== today) {
     state.day = today;
-    state.spentTodayPEN = 0;
+    state.spentToday = 0;
   }
 }

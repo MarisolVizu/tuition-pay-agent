@@ -13,10 +13,10 @@ const setup = (invoiceId: string, providerId: string) => {
 describe("quotes", () => {
   it("computes total cost = mid + markup + fee", () => {
     const { quote } = setup("INV-HIT-2611", "swiftlite");
-    expect(quote.midCostPEN).toBe(14250);
-    expect(quote.fxMarkupPEN).toBe(156.75);
-    expect(quote.totalPEN).toBe(14441.75);
-    expect(quote.hiddenCostPEN).toBe(191.75);
+    expect(quote.midCost).toBe(14250);
+    expect(quote.fxMarkup).toBe(156.75);
+    expect(quote.total).toBe(14441.75);
+    expect(quote.hiddenCost).toBe(191.75);
   });
   it("never recommends the non-compliant provider even though it is cheapest", () => {
     const s = initialState();
@@ -66,10 +66,10 @@ describe("policy engine", () => {
   });
   it("enforces per-transaction and daily limits", () => {
     const { s, inv, prov, quote } = setup("INV-HIT-2611", "swiftlite");
-    s.limits.perTransactionPEN = 10000;
+    s.limits.perTransaction = 10000;
     expect(evaluatePayment(s, inv, prov, quote).checks.find((c) => c.id === "per_tx_limit")?.passed).toBe(false);
-    s.limits.perTransactionPEN = 16000;
-    s.spentTodayPEN = 8000;
+    s.limits.perTransaction = 16000;
+    s.spentToday = 8000;
     expect(evaluatePayment(s, inv, prov, quote).checks.find((c) => c.id === "daily_limit")?.passed).toBe(false);
   });
 });
@@ -84,7 +84,7 @@ describe("payment lifecycle", () => {
     if (r.status !== "awaiting_approval") throw new Error();
     const ok = decidePending(s, r.pending.id, true);
     expect(ok.ok).toBe(true);
-    expect(s.balances.PEN).toBe(18500 - 14441.75);
+    expect(s.balance).toBe(18500 - 14441.75);
     expect(findInvoice(s, "INV-HIT-2611")!.status).toBe("paid");
     expect(proposePayment(s, "INV-HIT-2611", "swiftlite", "again").status).toBe("denied");
   });
@@ -94,14 +94,14 @@ describe("payment lifecycle", () => {
     if (r.status !== "awaiting_approval") throw new Error();
     setTier(s, 1);
     expect(decidePending(s, r.pending.id, true).ok).toBe(false);
-    expect(s.balances.PEN).toBe(18500);
+    expect(s.balance).toBe(18500);
   });
   it("rejecting moves no money", () => {
     const s = initialState();
     const r = proposePayment(s, "INV-HIT-2611", "andes_wire", "test");
     if (r.status !== "awaiting_approval") throw new Error();
     decidePending(s, r.pending.id, false);
-    expect(s.balances.PEN).toBe(18500);
+    expect(s.balance).toBe(18500);
     expect(s.transactions).toHaveLength(0);
   });
 });

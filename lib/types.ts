@@ -1,5 +1,5 @@
-export type Currency = "PEN" | "USD" | "CNY" | "EUR";
-export type ForeignCurrency = Exclude<Currency, "PEN">;
+import type { Currency } from "./currencies";
+export type { Currency } from "./currencies";
 
 /**
  * Permission tiers (least privilege by default).
@@ -17,7 +17,7 @@ export interface Payee {
   id: string;
   name: string;
   country: string;
-  currency: ForeignCurrency;
+  currency: Currency;
   account: string; // stored in full in the sandbox, always masked on output
   verified: boolean;
   category: PayeeCategory;
@@ -28,7 +28,7 @@ export interface Invoice {
   payeeId: string;
   description: string;
   amount: number;
-  currency: ForeignCurrency;
+  currency: Currency;
   dueDate: string; // ISO date
   status: "open" | "paid";
   rawText: string; // untrusted document text, as received
@@ -37,7 +37,7 @@ export interface Invoice {
 export interface Provider {
   id: string;
   name: string;
-  fixedFeePEN: number;
+  fixedFeeUSD: number; // converted to the home currency at quote time
   spreadPct: number; // markup over mid-market rate, in percent
   eta: string;
   compliant: boolean;
@@ -46,17 +46,18 @@ export interface Provider {
 }
 
 export interface Quote {
+  home: Currency; // all money fields below are in this currency
   providerId: string;
   providerName: string;
   amount: number;
-  currency: ForeignCurrency;
+  currency: Currency;
   midRate: number;
   providerRate: number;
-  midCostPEN: number;
-  fxMarkupPEN: number;
-  feePEN: number;
-  totalPEN: number;
-  hiddenCostPEN: number;
+  midCost: number;
+  fxMarkup: number;
+  fee: number;
+  total: number;
+  hiddenCost: number;
   eta: string;
   compliant: boolean;
   complianceNote: string;
@@ -90,17 +91,17 @@ export interface Transaction {
   payeeName: string;
   providerName: string;
   amount: number;
-  currency: ForeignCurrency;
-  debitedPEN: number;
+  currency: Currency;
+  debited: number;
   approvedBy: "human" | "policy_auto";
   reference: string;
 }
 
 export interface FxAlert {
   id: string;
-  currency: ForeignCurrency;
+  currency: Currency;
   direction: "below" | "above";
-  targetPENPerUnit: number;
+  targetPerUnit: number;
   createdAt: string;
   triggeredAt?: string;
   triggeredRate?: number;
@@ -120,9 +121,9 @@ export interface AuditEntry {
 }
 
 export interface Limits {
-  perTransactionPEN: number;
-  dailyPEN: number;
-  autoApprovePEN: number;
+  perTransaction: number;
+  daily: number;
+  autoApprove: number;
 }
 
 export interface SandboxState {
@@ -131,13 +132,14 @@ export interface SandboxState {
   createdAt: string;
   day: string;
   tier: Tier;
-  balances: Record<Currency, number>;
-  rates: Record<ForeignCurrency, number>; // PEN per 1 unit (mid-market)
+  home: Currency; // the currency the student pays from (chosen by the user)
+  balance: number; // in home currency
+  rates: Record<string, number>; // home per 1 unit of each other currency (mid-market)
   ratesSource: { kind: "live" | "fallback"; provider: string; asOf: string; note?: string; simulatedMoves: number };
   payees: Payee[];
   invoices: Invoice[];
   limits: Limits;
-  spentTodayPEN: number;
+  spentToday: number;
   pending: PendingAction[];
   transactions: Transaction[];
   alerts: FxAlert[];
@@ -150,6 +152,8 @@ export interface AgentEvent {
   input: Record<string, unknown>;
   ok: boolean;
   summary: string;
+  /** Structured result for the UI (provider comparison, payment decision). */
+  data?: unknown;
 }
 
 export interface ChatMessage {

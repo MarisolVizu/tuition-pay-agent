@@ -9,12 +9,13 @@ title: Testing and evidence
 
 ## Automated tests
 
-`npm test` runs 32 Vitest tests in four suites:
+`npm test` runs 42 Vitest tests in four suites:
 
 - `tests/policy.test.ts`: quote maths, recommender excludes unlicensed providers, every policy check, the tier-3 auto-approve boundary, the full propose → approve → duplicate-block lifecycle, re-check at approval, rejection.
 - `tests/security.test.ts`: injection scanner (positive and negative), forged `</untrusted>` tag, PII masking in outputs and audit log, input caps, hash-chain tamper detection, forged-state rejection, tool gating by tier, unknown tools.
 - `tests/agent.test.ts`: five end-to-end tasks in English and Spanish.
-- `tests/fx.test.ts`: live-rate parsing (inversion to PEN per unit), validation of bad responses, fallback on HTTP errors and network failure.
+- `tests/fx.test.ts`: live-rate parsing for any base currency, validation of bad or mismatched responses, fallback on HTTP errors and network failure, conversion of the profile and fees into the home currency, same-currency payments without FX markup, currency detection in English and Spanish.
+- `tests/agent.test.ts` also runs the tuition flow from USD, JPY, CNY, EUR and MXN accounts.
 
 ## Headless sandbox run
 

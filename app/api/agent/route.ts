@@ -18,6 +18,6 @@ export async function POST(req: Request) {
     .map((m) => ({ role: m.role, content: sanitizeUserMessage(m.content) }))
     .filter((m) => m.content.length > 0);
   if (!messages.length || messages[messages.length - 1].role !== "user") return error("The last message must be from the user");
-  const { reply, events, mode } = await runAgent(state, messages);
-  return respond(state, { reply, events, agentMode: mode });
+  const { reply, events, mode, meta } = await runAgent(state, messages);
+  return respond(state, { reply, events, agentMode: mode, agent: meta });
 }

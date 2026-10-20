@@ -39,7 +39,7 @@ The approval endpoint (`/api/confirm`) is not reachable by the agent: there is n
 | T5 | User edits browser state (balance, limits, tier) | HMAC-SHA256 signature with server secret, constant-time compare, 401 on mismatch | `security.test.ts`, API test |
 | T6 | Double payment | Invoice must be open and not already pending | `policy.test.ts` |
 | T7 | Approving a stale proposal after conditions changed | Full re-evaluation at approval | `policy.test.ts` |
-| T8 | Leaking account numbers or e-mails | Masking in tool outputs and audit log | `security.test.ts` |
+| T8 | Leaking account numbers or e-mails | Masking of string values in tool outputs and audit log (numbers such as amounts and rates are never altered) | `security.test.ts` |
 | T9 | Silent editing of history | Hash-chained audit log, verified on every response and shown in the UI | `security.test.ts` |
 | T10 | Oversized or malformed input | 1,500-character message cap, control-character stripping, 400 KB body cap, validation of tool input | `security.test.ts` |
 | T11 | Clickjacking, MIME sniffing | `X-Frame-Options: DENY`, `nosniff`, strict referrer, permissions policy | `next.config.mjs` |

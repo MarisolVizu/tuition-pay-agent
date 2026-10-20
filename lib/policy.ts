@@ -1,5 +1,6 @@
 import type { Invoice, PolicyCheck, PolicyDecision, Provider, Quote, SandboxState } from "./types";
 import { getPayee } from "./sandbox";
+import { money } from "./currencies";
 import { scanUntrusted } from "./guard";
 
 /**
@@ -15,7 +16,7 @@ export function evaluatePayment(
 ): { decision: PolicyDecision; checks: PolicyCheck[] } {
   const payee = getPayee(state, invoice.payeeId);
   const scan = scanUntrusted(invoice.rawText);
-  const { perTransactionPEN, dailyPEN, autoApprovePEN } = state.limits;
+  const { perTransaction, daily, autoApprove } = state.limits;
 
   const checks: PolicyCheck[] = [
     {
@@ -57,34 +58,34 @@ export function evaluatePayment(
     {
       id: "balance",
       label: "Enough balance",
-      passed: state.balances.PEN >= quote.totalPEN,
-      detail: `Needs PEN ${quote.totalPEN.toFixed(2)}, available PEN ${state.balances.PEN.toFixed(2)}`
+      passed: state.balance >= quote.total,
+      detail: `Needs ${money(state.home, quote.total)}, available ${money(state.home, state.balance)}`
     },
     {
       id: "per_tx_limit",
       label: "Within per-transaction limit",
-      passed: quote.totalPEN <= perTransactionPEN,
-      detail: `Limit PEN ${perTransactionPEN}`
+      passed: quote.total <= perTransaction,
+      detail: `Limit ${money(state.home, perTransaction)}`
     },
     {
       id: "daily_limit",
       label: "Within daily limit",
-      passed: state.spentTodayPEN + quote.totalPEN <= dailyPEN,
-      detail: `Spent today PEN ${state.spentTodayPEN.toFixed(2)} of ${dailyPEN}`
+      passed: state.spentToday + quote.total <= daily,
+      detail: `Spent today ${money(state.home, state.spentToday)} of ${money(state.home, daily)}`
     }
   ];
 
   if (checks.some((c) => !c.passed)) return { decision: "deny", checks };
   if (opts.humanConfirmed) return { decision: "auto_execute", checks };
-  if (state.tier === 3 && quote.totalPEN <= autoApprovePEN) {
-    checks.push({ id: "auto_limit", label: "Under auto-approve limit", passed: true, detail: `PEN ${quote.totalPEN.toFixed(2)} ≤ ${autoApprovePEN}` });
+  if (state.tier === 3 && quote.total <= autoApprove) {
+    checks.push({ id: "auto_limit", label: "Under auto-approve limit", passed: true, detail: `${money(state.home, quote.total)} ≤ ${money(state.home, autoApprove)}` });
     return { decision: "auto_execute", checks };
   }
   checks.push({
     id: "auto_limit",
     label: "Human approval required",
     passed: true,
-    detail: state.tier === 3 ? `Above auto-approve limit of PEN ${autoApprovePEN}` : "Tier 2 requires approval for every payment"
+    detail: state.tier === 3 ? `Above auto-approve limit of ${money(state.home, autoApprove)}` : "Tier 2 requires approval for every payment"
   });
   return { decision: "needs_confirmation", checks };
 }
@@ -95,5 +96,6 @@ export const TOOL_MIN_TIER: Record<string, number> = {
   get_fx_rates: 0,
   compare_providers: 1,
   create_fx_alert: 1,
+  delete_fx_alert: 1,
   propose_payment: 0 // always callable; the policy engine decides (so denials are logged and explained)
 };

@@ -1,11 +1,12 @@
-import type { AgentEvent, ForeignCurrency, SandboxState } from "./types";
+import type { AgentEvent, Currency, SandboxState } from "./types";
+import { CURRENCY_CODES, isCurrency } from "./currencies";
 import { audit } from "./audit";
 import { TOOL_MIN_TIER } from "./policy";
 import { compareProviders, findInvoice, getPayee } from "./sandbox";
 import { maskAccount, scanUntrusted, wrapUntrusted } from "./guard";
-import { createAlert, proposePayment } from "./actions";
+import { createAlert, deleteAlert, proposePayment } from "./actions";
 
-const FOREIGN: ForeignCurrency[] = ["USD", "CNY", "EUR"];
+const CODES: string[] = [...CURRENCY_CODES];
 
 /** Tool schemas exposed to the language model (Anthropic Messages API format). */
 export const TOOL_SCHEMAS = [
@@ -22,34 +23,44 @@ export const TOOL_SCHEMAS = [
   },
   {
     name: "get_fx_rates",
-    description: "Current mid-market reference rates (PEN per 1 unit of USD, CNY, EUR), with their source and update time. Live data from exchangerate-api.com when available.",
+    description: "Current mid-market reference rates: how many units of the user's home currency one unit of each supported currency costs, with source and update time. Live data from exchangerate-api.com when available.",
     input_schema: { type: "object", properties: {}, additionalProperties: false }
   },
   {
     name: "compare_providers",
     description:
-      "Quote every transfer provider for an invoice (or an amount + currency). Shows FX markup, fees, total PEN cost, speed and compliance. The recommended field is the cheapest compliant, in-scope provider.",
+      "Quote every transfer provider for an invoice (or an amount + currency). Shows FX markup, fees, total cost in the home currency, speed and compliance. The recommended field is the cheapest compliant, in-scope provider.",
     input_schema: {
       type: "object",
       properties: {
         invoice_id: { type: "string", description: "Invoice id, e.g. INV-HIT-2611" },
         amount: { type: "number", description: "Amount in foreign currency, if no invoice" },
-        currency: { type: "string", enum: FOREIGN }
+        currency: { type: "string", enum: CODES }
       },
       additionalProperties: false
     }
   },
   {
     name: "create_fx_alert",
-    description: "Notify the user when a currency's PEN rate crosses a target.",
+    description: "Create or replace the rate alert for a currency (one alert per currency; a new one replaces the old). The rate is in home-currency units per 1 unit. 'below' targets must be under today's rate and 'above' targets over it.",
     input_schema: {
       type: "object",
       properties: {
-        currency: { type: "string", enum: FOREIGN },
+        currency: { type: "string", enum: CODES },
         direction: { type: "string", enum: ["below", "above"] },
-        target_pen_per_unit: { type: "number" }
+        target_per_unit: { type: "number" }
       },
-      required: ["currency", "direction", "target_pen_per_unit"],
+      required: ["currency", "direction", "target_per_unit"],
+      additionalProperties: false
+    }
+  },
+  {
+    name: "delete_fx_alert",
+    description: "Delete the user's rate alert for a currency (or by alert id).",
+    input_schema: {
+      type: "object",
+      properties: { currency_or_id: { type: "string", description: "Currency code (e.g. USD) or alert id (e.g. AL-0003)" } },
+      required: ["currency_or_id"],
       additionalProperties: false
     }
   },
@@ -87,13 +98,15 @@ export function runTool(state: SandboxState, name: string, rawInput: unknown): {
     case "get_account_overview":
       return ok(
         {
-          balances: state.balances,
+          homeCurrency: state.home,
+          balance: state.balance,
+          alerts: state.alerts,
           tier: state.tier,
           limits: state.limits,
-          spentTodayPEN: state.spentTodayPEN,
+          spentToday: state.spentToday,
           payees: state.payees.map((p) => ({ id: p.id, name: p.name, country: p.country, currency: p.currency, account: maskAccount(p.account), verified: p.verified, category: p.category }))
         },
-        "Read balances, limits and payees"
+        "Read balance, limits and payees"
       );
 
     case "list_invoices":
@@ -120,7 +133,8 @@ export function runTool(state: SandboxState, name: string, rawInput: unknown): {
     case "get_fx_rates":
       return ok(
         {
-          unit: "PEN per 1 unit (mid-market)",
+          unit: `${state.home} per 1 unit (mid-market)`,
+          homeCurrency: state.home,
           rates: state.rates,
           source: state.ratesSource,
           note: state.ratesSource?.simulatedMoves > 0 ? `Includes ${state.ratesSource.simulatedMoves} simulated market move(s) on top of the reference rate` : undefined
@@ -130,7 +144,7 @@ export function runTool(state: SandboxState, name: string, rawInput: unknown): {
 
     case "compare_providers": {
       let amount = Number(input.amount);
-      let currency = input.currency as ForeignCurrency;
+      let currency = input.currency as Currency;
       let payee;
       if (typeof input.invoice_id === "string") {
         const inv = findInvoice(state, input.invoice_id);
@@ -139,23 +153,30 @@ export function runTool(state: SandboxState, name: string, rawInput: unknown): {
         currency = inv.currency;
         payee = getPayee(state, inv.payeeId);
       }
-      if (!FOREIGN.includes(currency) || !(amount > 0) || amount > 1_000_000) return fail("compare_providers needs a valid invoice_id or amount + currency");
+      if (!isCurrency(currency) || !(amount > 0) || amount > 1_000_000_000) return fail("compare_providers needs a valid invoice_id or amount + currency");
       const res = compareProviders(state, amount, currency, payee);
-      return ok(res, `Compared ${res.quotes.length} providers for ${currency} ${amount}`);
+      return {
+        result: res,
+        event: { tool: name, input, ok: true, summary: `Compared ${res.quotes.length} providers for ${currency} ${amount}`, data: { quotes: res.quotes, recommendedId: res.recommended?.providerId ?? null } }
+      };
     }
 
     case "create_fx_alert": {
-      const currency = input.currency as ForeignCurrency;
+      const currency = input.currency as Currency;
       const direction = input.direction as "below" | "above";
-      const target = Number(input.target_pen_per_unit);
-      if (!FOREIGN.includes(currency) || !["below", "above"].includes(direction) || !(target > 0)) return fail("Invalid alert parameters");
-      const a = createAlert(state, currency, direction, target);
-      return ok(a, `Alert set: ${currency} ${direction} ${a.targetPENPerUnit}`);
+      const target = Number(input.target_per_unit);
+      const r = createAlert(state, currency, direction, target, "agent");
+      return { result: r, event: { tool: name, input, ok: r.ok, summary: r.message } };
+    }
+
+    case "delete_fx_alert": {
+      const r = deleteAlert(state, String(input.currency_or_id ?? ""), "agent");
+      return { result: r, event: { tool: name, input, ok: r.ok, summary: r.message } };
     }
 
     case "propose_payment": {
       const r = proposePayment(state, String(input.invoice_id ?? ""), String(input.provider_id ?? ""), String(input.reason ?? ""));
-      return { result: r, event: { tool: name, input, ok: r.status !== "denied", summary: r.message } };
+      return { result: r, event: { tool: name, input, ok: r.status !== "denied", summary: r.message, data: r } };
     }
   }
   return fail(`Unhandled tool ${name}`);

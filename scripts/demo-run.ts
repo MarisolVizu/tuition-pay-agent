@@ -26,7 +26,7 @@ setTier(s, 0);
 say("Compare sending 1200 USD");
 setTier(s, 3);
 say("Paga la cuota de intercambio en China");
-say("Alert me if USD drops below 3.76");
+say("Alert me if USD drops below 3.74");
 let seed = 7;
 tickMarket(s, () => ((seed = (seed * 9301 + 49297) % 233280) / 233280));
 transcript.push({ step: "market tick", reply: JSON.stringify(s.rates) });
@@ -36,7 +36,8 @@ const evidence = {
   environment: "Kuntur sandbox — simulated accounts, no real money moved",
   sessionId: s.sessionId,
   chainVerification: verifyChain(s.audit),
-  finalBalances: s.balances,
+  homeCurrency: s.home,
+      finalBalance: s.balance,
   transactions: s.transactions,
   alerts: s.alerts,
   transcript,

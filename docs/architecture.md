@@ -60,7 +60,7 @@ hidden cost  = A · r · s + f
 
 Recommendation = cheapest quote that is **licensed** and **allowed for the payee category**. Cheaper non-compliant quotes are shown but marked as excluded, so the user sees why.
 
-Example (USD 3,800 tuition, r = 3.75): SwiftLite total PEN 14,441.75 (hidden PEN 191.75) vs bank wire PEN 14,705.50 (hidden PEN 455.50), a saving of PEN 263.75.
+Example with the fallback reference rate (USD 3,800 tuition, r = 3.75; live figures vary daily): SwiftLite total PEN 14,441.75 (hidden PEN 191.75) vs bank wire PEN 14,705.50 (hidden PEN 455.50), a saving of PEN 263.75.
 
 ### 2.3 Policy engine (`lib/policy.ts`)
 
@@ -86,7 +86,16 @@ Invoices are untrusted. Their text is wrapped in `<untrusted>` tags (with any fo
 
 `hash_n = SHA-256(seq, ts, actor, type, summary, data, hash_{n-1})`. Changing any past entry breaks every later link; `verifyChain` reports where. PII (account numbers, e-mails) is masked before an entry is written.
 
-## 3. Sandbox data
+## 3. Data: what is real and what is simulated
+
+| Data | Source |
+|---|---|
+| Mid-market exchange rates (PEN per USD, CNY, EUR) | **Real.** ExchangeRate-API open access endpoint, fetched when a session starts, cached 6 hours, updated daily by the provider. Responses are validated (success flag, positive values, sanity band); on failure the sandbox uses built-in reference values and says so in the UI and the audit log. |
+| “Simulate market move” | Simulated ±0.8 % moves on top of the real reference rate, to demonstrate FX alerts. |
+| Balances, payments, invoices, payees | Simulated sandbox, as the competition rules allow for non-on-chain topics. |
+| Transfer providers | Fictional, each representing a real market category: traditional bank wire, fintech transfer service, education payment platform, unlicensed operator. Spreads and fees are illustrative assumptions following the real-world pattern (banks most expensive, fintechs cheaper, unlicensed operators cheapest but non-compliant). |
+
+## 3b. Sandbox data
 
 | Item | Value |
 |---|---|

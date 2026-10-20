@@ -133,6 +133,7 @@ export interface SandboxState {
   tier: Tier;
   balances: Record<Currency, number>;
   rates: Record<ForeignCurrency, number>; // PEN per 1 unit (mid-market)
+  ratesSource: { kind: "live" | "fallback"; provider: string; asOf: string; note?: string; simulatedMoves: number };
   payees: Payee[];
   invoices: Invoice[];
   limits: Limits;

@@ -5,6 +5,8 @@ import type { ProposeResult } from "./actions";
 
 export const SYSTEM_PROMPT = `You are Kuntur, a financial agent for international students. You work inside a simulated (sandbox) account: a Peruvian student whose home currency is PEN and who pays tuition, housing and fees abroad.
 
+Exchange rates are real mid-market reference rates (exchangerate-api.com, daily) when available; payments, balances, invoices and providers are simulated.
+
 Your job: complete real tasks end to end — find what is due, compare transfer providers on TOTAL cost (FX markup + fees, in PEN), recommend, and propose payments.
 
 Hard rules:
@@ -247,7 +249,11 @@ export function runRules(state: SandboxState, text: string): RunResult {
   if (/(rate|tipo de cambio|exchange rate|\bfx\b|d[oó]lar|yuan)/i.test(text)) {
     const r = call("get_fx_rates");
     const rates = r.result.rates as Record<string, number>;
-    return done((es ? "Tipos de cambio (PEN por unidad, mercado medio):\n" : "Mid-market rates (PEN per unit):\n") + Object.entries(rates).map(([c, v]) => `- ${c}: ${v}`).join("\n"));
+    const src = r.result.source as { kind: string; provider: string; asOf: string };
+    const srcLine = src.kind === "live"
+      ? es ? `Fuente: ${src.provider}, actualizado ${src.asOf}.` : `Source: ${src.provider}, updated ${src.asOf}.`
+      : es ? "Fuente: valores de referencia internos (la API en vivo no respondió)." : "Source: built-in reference values (live API unavailable).";
+    return done((es ? "Tipos de cambio (PEN por unidad, mercado medio):\n" : "Mid-market rates (PEN per unit):\n") + Object.entries(rates).map(([c, v]) => `- ${c}: ${v}`).join("\n") + "\n" + srcLine);
   }
 
   // 4. Generic comparison with amount

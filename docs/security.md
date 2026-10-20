@@ -51,7 +51,8 @@ The approval endpoint (`/api/confirm`) is not reachable by the agent: there is n
 | Signed state can be **replayed**: a user could resend an older valid state (e.g. from before a payment). | Medium in production, none in sandbox | Production needs a server-side ledger with a per-session version or nonce (e.g. Postgres or a key-value store). |
 | The injection scanner is pattern-based; novel phrasings may pass the scan. | Medium | Defence in depth: payee verification, licence and limits still apply. Plan: add a classifier model and bank-detail change detection. |
 | Payee verification is a static flag. | Medium | Real flow: confirmation-of-payee or micro-deposit check, plus alerts when bank details change. |
-| FX rates and providers are simulated. | Low (sandbox) | Integrate licensed rate feeds and provider APIs. |
+| Reference FX rates come from a free daily feed, not a tradable quote. | Low | Responses validated with a sanity band and fallback; production would use a licensed intraday feed and live provider quotes. |
+| Providers are fictional with assumed spreads. | Low (sandbox) | Integrate real provider quote APIs. |
 | No user authentication; anyone with the link gets a fresh sandbox. | Low (sandbox) | Add passkeys or OAuth and per-user KYC before real money. |
 | No rate limiting on serverless endpoints. | Low | Add Vercel firewall rules or an edge rate limiter. |
 | LLM wording could be misleading even when actions are safe. | Low | Numbers come from tool results; the authorization card shows the authoritative breakdown. |

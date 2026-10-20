@@ -12,6 +12,7 @@ Kuntur is an AI agent that completes a real financial task end to end: it reads 
 ## Features
 
 - **Agent with tools**: tool-use loop on any OpenAI-compatible model (Groq, Gemini, OpenRouter) or Claude, with a deterministic planner when no key is set.
+- **Real exchange rates**: live mid-market reference rates from ExchangeRate-API (Rates By Exchange Rate API), with validated fallback.
 - **Total-cost comparison**: mid-market cost, hidden FX markup, fees, speed, licence.
 - **Policy engine outside the model**: 9 checks; deny, human approval or auto-execute.
 - **Permission tiers 0–3**: read-only, advise, confirm, autonomous within limits.
@@ -28,7 +29,7 @@ cd kuntur
 npm install
 cp .env.example .env.local      # set STATE_SECRET; ANTHROPIC_API_KEY is optional
 npm run dev                     # http://localhost:3000
-npm test                        # 28 tests
+npm test                        # 32 tests
 npm run demo                    # writes evidence/sandbox-run.json
 ```
 

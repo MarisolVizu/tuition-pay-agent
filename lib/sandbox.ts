@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import type { ForeignCurrency, Invoice, Provider, Quote, SandboxState, Payee } from "./types";
 import { audit } from "./audit";
+import { FALLBACK_RATES, type LiveRates } from "./fx";
 
 /** Licensed-looking but fictional providers. Fees in PEN, spread over mid-market. */
 export const PROVIDERS: Provider[] = [
@@ -88,7 +89,7 @@ const INVOICES: Invoice[] = [
   }
 ];
 
-export function initialState(): SandboxState {
+export function initialState(live?: LiveRates): SandboxState {
   const now = new Date();
   const state: SandboxState = {
     version: 1,
@@ -97,7 +98,10 @@ export function initialState(): SandboxState {
     day: now.toISOString().slice(0, 10),
     tier: 2,
     balances: { PEN: 18500, USD: 420, CNY: 0, EUR: 0 },
-    rates: { USD: 3.75, CNY: 0.52, EUR: 4.05 },
+    rates: live ? { ...live.rates } : { ...FALLBACK_RATES },
+    ratesSource: live
+      ? { ...live.source, simulatedMoves: 0 }
+      : { kind: "fallback", provider: "built-in reference values", asOf: "static", simulatedMoves: 0 },
     payees: structuredClone(PAYEES),
     invoices: structuredClone(INVOICES),
     limits: { perTransactionPEN: 16000, dailyPEN: 20000, autoApprovePEN: 2000 },
@@ -110,7 +114,9 @@ export function initialState(): SandboxState {
   };
   return audit(state, "system", "session.created", "Sandbox session created with simulated student account", {
     tier: state.tier,
-    balances: state.balances
+    balances: state.balances,
+    rates: state.rates,
+    ratesSource: state.ratesSource
   });
 }
 
@@ -174,7 +180,8 @@ export function tickMarket(state: SandboxState, rand: () => number = Math.random
     const move = (rand() * 2 - 1) * 0.008;
     state.rates[c] = Math.round(state.rates[c] * (1 + move) * 10000) / 10000;
   });
-  audit(state, "system", "market.tick", "Simulated market moved", { before, after: state.rates });
+  if (state.ratesSource) state.ratesSource.simulatedMoves += 1;
+  audit(state, "system", "market.tick", "Simulated market move applied on top of the reference rate", { before, after: state.rates });
   for (const a of state.alerts) {
     if (a.triggeredAt) continue;
     const r = state.rates[a.currency];

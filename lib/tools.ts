@@ -22,7 +22,7 @@ export const TOOL_SCHEMAS = [
   },
   {
     name: "get_fx_rates",
-    description: "Current mid-market rates, expressed as PEN per 1 unit of USD, CNY and EUR.",
+    description: "Current mid-market reference rates (PEN per 1 unit of USD, CNY, EUR), with their source and update time. Live data from exchangerate-api.com when available.",
     input_schema: { type: "object", properties: {}, additionalProperties: false }
   },
   {
@@ -118,7 +118,15 @@ export function runTool(state: SandboxState, name: string, rawInput: unknown): {
       );
 
     case "get_fx_rates":
-      return ok({ unit: "PEN per 1 unit", rates: state.rates, source: "sandbox mid-market" }, "Read FX rates");
+      return ok(
+        {
+          unit: "PEN per 1 unit (mid-market)",
+          rates: state.rates,
+          source: state.ratesSource,
+          note: state.ratesSource?.simulatedMoves > 0 ? `Includes ${state.ratesSource.simulatedMoves} simulated market move(s) on top of the reference rate` : undefined
+        },
+        `Read FX rates (${state.ratesSource?.kind === "live" ? "live, " + state.ratesSource.provider : "fallback values"})`
+      );
 
     case "compare_providers": {
       let amount = Number(input.amount);

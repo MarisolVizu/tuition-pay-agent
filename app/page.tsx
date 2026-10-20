@@ -6,7 +6,7 @@ import type { AgentEvent, AuditEntry, ChatMessage, PendingAction, SandboxState, 
 type Session = { state: SandboxState; sig: string; chain: { valid: boolean; brokenAt?: number }; mode: "llm" | "rules" };
 type Msg = ChatMessage & { events?: AgentEvent[] };
 
-const STORAGE_KEY = "kuntur-session-v1";
+const STORAGE_KEY = "kuntur-session-v2";
 
 const TIER_TEXT: Record<Tier, string> = {
   0: "Read-only. Kuntur can look at balances, invoices and rates.",
@@ -204,10 +204,18 @@ export default function Home() {
             );
           })}
 
-          <h2>Rates (PEN per unit)</h2>
+          <h2>Mid-market rates (PEN per unit)</h2>
           {Object.entries(s.rates).map(([c, r]) => (
             <div className="row" key={c}><span>{c}</span><span>{r}</span></div>
           ))}
+          <p className="sub" style={{ margin: "8px 0 0" }}>
+            {s.ratesSource?.kind === "live" ? (
+              <>Live reference rate, updated {s.ratesSource.asOf}. <a href="https://www.exchangerate-api.com" target="_blank" rel="noopener noreferrer">Rates By Exchange Rate API</a></>
+            ) : (
+              <>Built-in reference values: the live rate service did not respond.</>
+            )}
+            {s.ratesSource?.simulatedMoves ? <> Includes {s.ratesSource.simulatedMoves} simulated move(s).</> : null}
+          </p>
           <div style={{ marginTop: 10 }}>
             <button className="btn" onClick={tick} disabled={busy}>Simulate market move</button>
           </div>
